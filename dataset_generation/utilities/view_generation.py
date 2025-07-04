@@ -1,15 +1,16 @@
-import os
-
-os.environ["OMP_NUM_THREADS"] = "1"
+# import os
+# os.environ["OMP_NUM_THREADS"] = "1"
 
 import open3d as o3d
 import numpy as np
 from scipy import spatial
 from tqdm.notebook import tqdm
-from common import center, auto_radius, unit_vector, rotate_axis_random
+from common import center, auto_radius, unit_vector, rotate_axis_random, nearest_sort
 
 # import random
 from sklearn.cluster import KMeans
+from scipy.cluster.vq import kmeans2
+
 from skspatial.objects import Plane, Points
 from scipy.spatial.transform import Rotation as R
 
@@ -44,41 +45,64 @@ def view_generation(pointcloud: np.ndarray, camera_wd=0.5, boundary_cluster_num=
     boundary_cluster_num = boundary_points.shape[0] if boundary_points.shape[0] < boundary_cluster_num else boundary_cluster_num
 
     if boundary_cluster_num == 0:
+        print("No boundary points found.")
         return None
+    
+    # boundary_points_kmeans = KMeans(n_clusters=boundary_cluster_num, n_init="auto").fit(boundary_points)
+    # boundary_points_kmeans_cluster = dict()
+    # for idx, label in enumerate(boundary_points_kmeans.labels_):
+    #     curr_pos, curr_nol = boundary_points[idx], boundary_normals[idx]
+    #     curr_p = np.concatenate([curr_pos, curr_nol], axis=0)
+    #     if label in boundary_points_kmeans_cluster.keys():
+    #         boundary_points_kmeans_cluster[label].append(curr_p)
+    #     else:
+    #         boundary_points_kmeans_cluster[label] = [curr_p]
+    # # print (f'we have {len(boundary_points_kmeans_cluster)} clusters of camera positions')
+    # boundary_selected_pos = []
+    # for d_k, d_v in boundary_points_kmeans_cluster.items():
+    #     s_i = np.random.choice(len(d_v))
+    #     boundary_selected_pos.append(d_v[s_i])
+    # boundary_selected_pos = np.asarray(boundary_selected_pos)
+    # print (f'boundary_selected_pos:{boundary_selected_pos}')
 
-    boundary_points_kmeans = KMeans(n_clusters=boundary_cluster_num, n_init="auto").fit(boundary_points)
+    centroids, labels = kmeans2(data=boundary_points, k=boundary_cluster_num, minit='++')
     boundary_points_kmeans_cluster = dict()
-    for idx, label in enumerate(boundary_points_kmeans.labels_):
+    for idx, label in enumerate(labels):
         curr_pos, curr_nol = boundary_points[idx], boundary_normals[idx]
         curr_p = np.concatenate([curr_pos, curr_nol], axis=0)
-        if label in boundary_points_kmeans_cluster.keys():
+        if label in boundary_points_kmeans_cluster:
             boundary_points_kmeans_cluster[label].append(curr_p)
         else:
             boundary_points_kmeans_cluster[label] = [curr_p]
-    # print (f'we have {len(boundary_points_kmeans_cluster)} clusters of camera positions')
+
     boundary_selected_pos = []
     for d_k, d_v in boundary_points_kmeans_cluster.items():
-        s_i = np.random.choice(len(d_v))
+        # s_i = np.random.choice(len(d_v))
+        # boundary_selected_pos.append(d_v[s_i])
+        
+        cluster_points = np.array([point[:3] for point in d_v]) 
+        cluster_center = np.mean(cluster_points, axis=0)
+        distances = np.linalg.norm(cluster_points - cluster_center, axis=1)
+        s_i = np.argmin(distances) 
         boundary_selected_pos.append(d_v[s_i])
     boundary_selected_pos = np.asarray(boundary_selected_pos)
-    # print (f'boundary_selected_pos:{boundary_selected_pos}')
+
+    boundary_selected_pos = nearest_sort(boundary_selected_pos)
 
     filtered_points = pcd.point.positions.numpy().reshape(-1, 3)
     kd_tree = spatial.cKDTree(filtered_points, balanced_tree=False)
     view_info = []
     for p_i, p_v in enumerate(boundary_selected_pos):
         tar_p, p_n = p_v[0:3], p_v[3:6]
-        _, idx = kd_tree.query(tar_p, k=my_max_nn)
 
+        _, idx = kd_tree.query(tar_p, k=my_max_nn)
         nei_points = filtered_points[idx[1:]]
 
         cp = center(nei_points)
-
         vec = tar_p - cp
         p_outer_u = unit_vector(vec)
 
-        view_direction = rotate_axis_random(p_outer_u, p_n)
-
+        view_direction = rotate_axis_random(p_outer_u, p_n, p_i)
         cam_p = tar_p + camera_wd * view_direction
 
         view_info.append(

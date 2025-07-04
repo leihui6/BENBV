@@ -16,7 +16,6 @@ from tqdm import tqdm
 from camera import Camera
 from env import NBVScanEnv
 
-# from view_generation import view_generation
 from common import (
     auto_radius,
     cal_coverage_with_KD,
@@ -44,7 +43,7 @@ OFFSET_DS = 0.3  # the offset distance of the camera
 COVERAGE_DIS_THRESHOLD = 0.0020
 COVERAGE_RATIO_THRESHOLD = 1.0
 SCAN_COUNT_THRESHOLD = 15
-PYBULLET_VISIBLE = True
+PYBULLET_VISIBLE = False
 
 NAME_LIST = [
     "Ours",  # 0
@@ -110,7 +109,9 @@ def nbv_simulation(pb_env, target_model_filename: str, object_name: str, DL_MODE
             # print (f'scanned data: (after filter) {scanned_data.shape[0]}/{model_pointsize}({100 * scanned_data.shape[0]/model_pointsize:.2f}%)')
             coverage, scanned_data_total = cal_coverage_with_KD(scanned_data, model_points, dis_threshold=COVERAGE_DIS_THRESHOLD)
             print(f"[*] Initial Coverage Ratio: {(100 * coverage):.6f}%")
-
+            if coverage < 0.05:
+                print(f"[X] Initial coverage is too low ({coverage:.6f}), skipping this model.")
+                return None
             cur_coverage_max = coverage
             current_view = (target_pos, camera_pos)
             max_coverage_list.append(coverage)
@@ -293,12 +294,15 @@ def nbv_simulation(pb_env, target_model_filename: str, object_name: str, DL_MODE
         cur_coverage_max = cur_coverage_max if tmp_coverage_max == 0 else tmp_coverage_max
         max_coverage_list.append(cur_coverage_max)
         overlap = calculate_overlap(curr_scanned_data, previous_data, threshold=COVERAGE_DIS_THRESHOLD)
+        print (f"Overlap Ratio: {(100 * overlap):.6f}%")
         overlap_list.append(overlap)
 
         # print the overlap and coverage for paper writing
-        if scan_count in [0, 2, 5, 9]:  # -> 3,6,10
-            print(f"Coverage at {scan_count}th scan: {(100 * cur_coverage_max):.6f}%")
-            print(f"Overlap at {scan_count}th scan: {(100*overlap):.6f}%")
+        # if scan_count in [0, 2, 5, 9]:  # -> 3,6,10
+        print(f"> Coverage at {scan_count+1}th scan: {(100 * cur_coverage_max):.6f}%")
+        print(f"> Overlap at {scan_count+1}th scan: {(100*overlap):.6f}%")
+        # if scan_count == 1:
+        #     exit()
 
         frame_history.append((previous_data, current_view, tmp_nbv, nbv_list, score_list))
         scanned_pointsize_total = scanned_data_total.shape[0]
@@ -412,6 +416,7 @@ if __name__ == "__main__":
     average_coverage, obj_i = 0, 0
     with tqdm(total=SIMULATION_COUNT, desc="Simulation Progress") as simulation_bar:
         for sim_i in range(SIMULATION_COUNT):
+            start_time = time.time()
             with tqdm(total=len(file_list), desc="Dataset Progress", leave=False) as dataset_bar:
                 for file_index, file_name in enumerate(file_list):
                     print(f"\n[SIM:{sim_i+1}/{SIMULATION_COUNT}, Data:{file_index+1}/{len(file_list)}]\nFilename: {file_name} ...")
@@ -444,14 +449,20 @@ if __name__ == "__main__":
                     record_filename = OUTPUT_FOLDER / dataset_name / f"{NAME_LIST[USED_METHOD]}_exp_record{noise_flag}.csv"
                     record_filename.parent.mkdir(parents=True, exist_ok=True)
                     data = [stem_name, coverage_list, overlap_list, dist, time_spent]
-                    # append_to_csv(record_filename, data)
+                    append_to_csv(record_filename, data)
 
                     frame_filename.parent.mkdir(parents=True, exist_ok=True)
                     # save_frame_history(frame_history, filename=frame_filename)
 
                     dataset_bar.update(1)
-                    break
+                    # break
             # end for
+            # print current simulation time and estimated time left
+            elapsed_time = time.time() - start_time
+            estimated_time_left = (SIMULATION_COUNT - sim_i - 1) * elapsed_time
+            print(
+                f"\n Completed in {elapsed_time:.2f} seconds.\n Estimated time left: {estimated_time_left/ 60:.2f} minutes."
+            )
             simulation_bar.update(1)
-            break
+            # break
         # end for

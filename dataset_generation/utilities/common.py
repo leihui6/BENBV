@@ -105,17 +105,59 @@ def cal_coverage_with_KD(partial_points: np.ndarray, entire_points: np.ndarray, 
     matched_points = np.asarray(matched_points).reshape(-1, 6)
     res = matched_points.shape[0] / entire_points.shape[0]
 
-    if MAKE_NOISE:
+    if MAKE_NOISE: # ignore
         return res, partial_points
     else:
         return res, matched_points
 
 
-def rotate_axis_random(vec_a, vec_b):
+def nearest_sort(points: np.ndarray):
+    assert points.shape[1] == 6, "points should be (N, 6) shape"
+    occupied_indices = np.zeros(points.shape[0], dtype=bool)
+    new_points = []
+    while len(new_points) != points.shape[0]:
+        if len(new_points) == 0:
+            new_points.append(points[0])
+            occupied_indices[0] = True
+        else:
+            nearest_dis, nearest_idx = np.inf, -1
+            for i in range(points.shape[0]):
+                if occupied_indices[i]:
+                    continue
+                else:
+                    dis = np.linalg.norm(new_points[-1][0:3] - points[i][0:3])
+                    if dis < nearest_dis:
+                        nearest_dis = dis
+                        nearest_idx = i
+            if nearest_idx != -1:
+                new_points.append(points[nearest_idx])
+                occupied_indices[nearest_idx] = True
+    # for i in range(len(new_points)-1):
+        # dis = np.linalg.norm(new_points[i][0:3] - new_points[i+1][0:3])
+        # print(f"Distance between point {i} and point {i+1}: {dis:.4f}")
+    # new_points = np.asarray(new_points, dtype=np.float32).reshape(-1, 6)
+
+    # draw the sorted points and connect them by lines
+    # import matplotlib.pyplot as plt
+    # from mpl_toolkits.mplot3d import Axes3D
+    # fig = plt.figure()
+    # ax = fig.add_subplot(111, projection='3d')
+    # ax.scatter(new_points[:, 0], new_points[:, 1], new_points[:, 2], c='b', marker='o')
+    # for i in range(len(new_points) - 1):
+    #     ax.plot([new_points[i][0], new_points[i + 1][0]],
+    #             [new_points[i][1], new_points[i + 1][1]],
+    #             [new_points[i][2], new_points[i + 1][2]], c='r')
+    # plt.show()
+    # exit()
+    return new_points
+
+def rotate_axis_random(vec_a, vec_b, idx):
     vec_a_u = unit_vector(vec_a)
     vec_b_u = unit_vector(vec_b)
     vec_c_u = np.cross(vec_a_u, vec_b_u)
-    rad = np.random.choice([np.deg2rad(v) for v in [-45, 0, 45]])
+    angle_list = [-45, 0, 45]
+    # rad = np.random.choice([np.deg2rad(v) for v in [-45, 0, 45]])
+    rad = np.deg2rad(angle_list[idx % len(angle_list)])  # ensure the index is within the range of angle_list
     # print (f'rad -> {rad}')
     r = R.from_rotvec(rad * vec_c_u)
     m = linalg.inv(r.as_matrix().T)
@@ -298,18 +340,18 @@ def file_under_folder(path, target_type="file", remove=[]):
 
 def read_dataset_file(dataset_name="ModelNet10"):
     if dataset_name == "ModelNet40":
-        # filename_list = glob.glob(r"./public_dataset/ModelNet40/test/**.off", recursive=True)
-        filename_list = glob.glob(r"./public_dataset/ModelNet40/train/**.off", recursive=True)
-        # filename_list = glob.glob(r"./public_dataset/ModelNet40/test/stool_stool_0108.off", recursive=True)
+        # filename_list = glob.glob(r"./dataset/ModelNet40/test/**.off", recursive=True)
+        filename_list = glob.glob(r"./dataset/ModelNet40/train/**.off", recursive=True)
+        # filename_list = glob.glob(r"./dataset/ModelNet40/test/stool_stool_0108.off", recursive=True)
     elif dataset_name == "Stanford3D":
-        # filename_list = glob.glob(r"./public_dataset/Stanford3D/*.obj")
-        # filename_list = glob.glob(r"./public_dataset/Stanford3D/dragon.obj")
-        filename_list = glob.glob(r"./public_dataset/Stanford3D/bunny.obj")
-        # filename_list = glob.glob(r"./public_dataset/Stanford3D/teapot.obj")
+        # filename_list = glob.glob(r"./dataset/Stanford3D/*.obj")
+        # filename_list = glob.glob(r"./dataset/Stanford3D/dragon.obj")
+        filename_list = glob.glob(r"./dataset/Stanford3D/bunny.obj")
+        # filename_list = glob.glob(r"./dataset/Stanford3D/teapot.obj")
     elif dataset_name == "ShapeNetV1":
-        # filename_list = glob.glob(r"./public_dataset/ShapeNetV1/test/*.obj", recursive=True)
-        filename_list = glob.glob(r"./public_dataset/ShapeNetV1/train/*.obj", recursive=True)
-        # filename_list = glob.glob(r"./public_dataset/ShapeNetV1/train/67ada28ebc79cc75a056f196c127ed77_model.obj")
+        # filename_list = glob.glob(r"./dataset/ShapeNetV1/test/*.obj", recursive=True)
+        filename_list = glob.glob(r"./dataset/ShapeNetV1/train/*.obj", recursive=True)
+        # filename_list = glob.glob(r"./dataset/ShapeNetV1/train/67ada28ebc79cc75a056f196c127ed77_model.obj")
     # filename_list.sort()
     rng = np.random.default_rng()
     rng.shuffle(filename_list)
@@ -495,8 +537,8 @@ def coverage_from_view(target_pos, camera_pos, pb_env, epc, entire_points, FILTE
     pc_world = pybullet_2_world(pointcloud, view_matrix)
     curr_scanned_data = np.asarray(pc_world.points)
 
-    if MAKE_NOISE:
-        curr_scanned_data = tsfm_noise(curr_scanned_data)
+    # if MAKE_NOISE:
+        # curr_scanned_data = tsfm_noise(curr_scanned_data)
 
     if curr_scanned_data.shape[0] == 0:
         return 0, epc, curr_scanned_data
@@ -512,11 +554,15 @@ def coverage_from_view(target_pos, camera_pos, pb_env, epc, entire_points, FILTE
     tmp_scanned_data_total = filter_grid(tmp_scanned_data_total, FILTER_THRESHOLD)
 
     # The points could be partial points or matched points depend on the MAKE_NOISE flag
-    o_res, points = cal_coverage_with_KD(tmp_scanned_data_total, entire_points, dis_threshold=OVERLAP_DIS_THRESHOLD, MAKE_NOISE=MAKE_NOISE)
-    return o_res, points, curr_scanned_data
+    coverage_tmp, matched_points = cal_coverage_with_KD(
+        tmp_scanned_data_total, entire_points, dis_threshold=OVERLAP_DIS_THRESHOLD, MAKE_NOISE=MAKE_NOISE
+    )
+    return coverage_tmp, matched_points, curr_scanned_data
 
 
-def best_coverage_from_views(pb_env, epc, view_candidates, cur_coverage_max, entire_points, FILTER_THRESHOLD, OVERLAP_DIS_THRESHOLD, MAKE_NOISE):
+def best_coverage_from_views(
+    pb_env, epc, view_candidates, cur_coverage_max, entire_points, FILTER_THRESHOLD, OVERLAP_DIS_THRESHOLD, MAKE_NOISE
+):
     """
     Identify the optimal view from a set of candidate views.
     :param pb_env: PyBullet environment instance.
@@ -539,7 +585,7 @@ def best_coverage_from_views(pb_env, epc, view_candidates, cur_coverage_max, ent
     for view_i, view in tqdm(enumerate(view_candidates), total=len(view_candidates), desc="Searching for views:"):
         target_pos, camera_pos = view[0:3], view[3:6]
         # calculate the coverage from the current view
-        o_res, matched_points, curr_scanned_data_tmp = coverage_from_view(
+        coverage, matched_points, curr_scanned_data_tmp = coverage_from_view(
             target_pos,
             camera_pos,
             pb_env=pb_env,
@@ -551,21 +597,39 @@ def best_coverage_from_views(pb_env, epc, view_candidates, cur_coverage_max, ent
         )
 
         nbv_list.append((target_pos, camera_pos))
-        coverage_list.append(o_res)
+        coverage_list.append(coverage)
 
         # calculate the overlap ratio at the current view
-        overlap = calculate_overlap(curr_scanned_data_tmp, entire_points, threshold=OVERLAP_DIS_THRESHOLD)
+        overlap = calculate_overlap(curr_scanned_data_tmp, epc, threshold=OVERLAP_DIS_THRESHOLD)
         overlap_list.append(overlap)
 
         # print(f"{view_i + 1}/{len(view_candidates)}: current scanned data: {curr_scanned_data.shape[0]} coverage: {100 * o_res:.2f}%")
         scanned_data_total_list.append(matched_points)
         curr_scanned_data_list.append(curr_scanned_data_tmp)
 
-    k, offset = 10, -0.5
-    coverage_weight = 1 / (1 + np.e ** ((-1 * k) * (cur_coverage_max + offset)))
-    score_list = (1 - coverage_weight) * np.array(overlap_list) + coverage_weight * np.array(coverage_list)
-    max_score_index = np.argmax(score_list)
+    def func(overlap):
+        # return a + (b - a) * np.sin(np.pi * overlap)
+        # return np.exp(-np.power(overlap -0.5, 2))
+        # return np.exp(-np.power(4 * (overlap+0.05) - 2, 2))
+        x = overlap
+        if x < 0.5 and x > 0.4:
+            return 1
+        elif x < 0.4:
+            return -6.25 * x*x+5*x
+        elif x > 0.5:
+            return -4*x*x + 4*x
+        
+    overlap_list = [func(o) for o in overlap_list]
 
+    k, offset = -10, -0.5
+    coverage_weight = (1.0) / (1 + np.exp(k * (cur_coverage_max + offset)))
+    score_list = coverage_weight * np.array(coverage_list) + (1 - coverage_weight) * np.array(overlap_list)
+    max_score_index = np.argmax(score_list)
+    
+    # print (coverage_list)
+    # print (overlap_list)
+    # max_score_index = np.argmax(coverage_list)
+    # exit()
     # print(f"coverage_list: {coverage_list},\noverlap_list: {overlap_list}")
     # draw the coverage and overlap histogram
     # plt.figure(figsize=(8, 6))
@@ -581,6 +645,8 @@ def best_coverage_from_views(pb_env, epc, view_candidates, cur_coverage_max, ent
     coverage_max = coverage_list[max_score_index]
     scanned_data_total = scanned_data_total_list[max_score_index]
     curr_scanned_data = curr_scanned_data_list[max_score_index]
+    print(f"selected coverage: {coverage_max:.3f}, overlap: {overlap_list[max_score_index]:.3f},\
+          cur_coverage_max: {cur_coverage_max:.3f}, score: {score_list[max_score_index]:.3f}")
 
     # end for
     # if MAKE_NOISE:
@@ -698,11 +764,17 @@ def tsfm_noise(points, translation_std=0.005, rotation_std=2.5):
     rotation_rad = np.deg2rad(rotation_deg)
 
     # Create rotation matrix
-    Rx = np.array([[1, 0, 0], [0, np.cos(rotation_rad[0]), -np.sin(rotation_rad[0])], [0, np.sin(rotation_rad[0]), np.cos(rotation_rad[0])]])
+    Rx = np.array(
+        [[1, 0, 0], [0, np.cos(rotation_rad[0]), -np.sin(rotation_rad[0])], [0, np.sin(rotation_rad[0]), np.cos(rotation_rad[0])]]
+    )
 
-    Ry = np.array([[np.cos(rotation_rad[1]), 0, np.sin(rotation_rad[1])], [0, 1, 0], [-np.sin(rotation_rad[1]), 0, np.cos(rotation_rad[1])]])
+    Ry = np.array(
+        [[np.cos(rotation_rad[1]), 0, np.sin(rotation_rad[1])], [0, 1, 0], [-np.sin(rotation_rad[1]), 0, np.cos(rotation_rad[1])]]
+    )
 
-    Rz = np.array([[np.cos(rotation_rad[2]), -np.sin(rotation_rad[2]), 0], [np.sin(rotation_rad[2]), np.cos(rotation_rad[2]), 0], [0, 0, 1]])
+    Rz = np.array(
+        [[np.cos(rotation_rad[2]), -np.sin(rotation_rad[2]), 0], [np.sin(rotation_rad[2]), np.cos(rotation_rad[2]), 0], [0, 0, 1]]
+    )
 
     R = Rz @ Ry @ Rx
 
@@ -712,12 +784,11 @@ def tsfm_noise(points, translation_std=0.005, rotation_std=2.5):
     return transformed_points
 
 
-def calculate_overlap(scanned_data, entire_data, threshold=0.1):
+def calculate_overlap(scanned_data, epc, threshold=0.1):
     scanned_data = scanned_data[:, 0:3]
-    entire_data = entire_data[:, 0:3]
-
+    epc = epc[:, 0:3]
     try:
-        tree = cKDTree(entire_data, balanced_tree=False)
+        tree = cKDTree(epc, balanced_tree=False)
         distances, indices = tree.query(scanned_data, k=1)
 
         # np.savetxt("tmp.txt", entire_data[indices], fmt="%.6f")
@@ -728,7 +799,6 @@ def calculate_overlap(scanned_data, entire_data, threshold=0.1):
     except Exception as e:
         print(f"Error calculating overlap: {e}")
         overlap_percentage = 0
-
     return overlap_percentage
 
 

@@ -25,7 +25,15 @@ def ours(pb_env, pointcloud: np.ndarray, entire_points, camera_distance: float, 
     """
     method#0: our proposed method
     """
-    view_info = view_generation(pointcloud=pointcloud, camera_wd=camera_distance)
+    
+    ####FUNC for determining the boundart cluster number
+    # boundary_cluster_num = int( 20 / (1 + np.exp(0.1* cur_coverage_max * 100 - 8)) + 3)
+    boundary_cluster_num = 20 
+    ####
+    print ("current coverage max:", cur_coverage_max, "boundary_cluster_num:", boundary_cluster_num)
+    # exit()
+    
+    view_info = view_generation(pointcloud=pointcloud, camera_wd=camera_distance, boundary_cluster_num=boundary_cluster_num)
     if view_info is None:
         print(f"No view information")
         return None
@@ -46,7 +54,7 @@ def random_boundary(pointcloud: np.ndarray, camera_distance: float):  # type: ig
     """
     method#1: generate the boundary first, and then select one of them randomly as the next view
     """
-    view_info = view_generation(pointcloud=pointcloud, camera_wd=camera_distance)
+    view_info = view_generation(pointcloud=pointcloud, camera_wd=camera_distance, boundary_cluster_num=20)
     if view_info is None:
         print(f"No view information")
         return None

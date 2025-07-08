@@ -1,0 +1,11 @@
+{
+    "batch_size": 128,
+    "num_epochs": 150,
+    "learning_rate": 0.001,
+    "downSample_size": 4096,
+    "max_frames": 16,
+    "num_augment": 2,
+    "angle_augment": 10,
+    "dataset_used_index": 1,
+    "dataset_path": ["/root/autodl-tmp/", "../nbv-explore/dataset_generation/output/"]
+}

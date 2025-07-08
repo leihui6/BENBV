@@ -1,11 +1,10 @@
 # BENBV (Boundary Exploration Next Best View)
 
-PS: The code will be released soon.
+This is the official repository for the Boundary Exploration of Next Best View Policy in 3D Robotic Scanning.
 
 <p align="center">
 <img src="./figures/Animation.gif" width="60%">
 <div> </div>
-<div align="center">This is the official repository for the Boundary Exploration of Next Best View Policy in 3D Robotic Scanning.</div>
 </p>
 
 ## Environment
@@ -41,7 +40,6 @@ The version of `Pytorch 2.3.1` and `Pytorch 1.8` has been tested.
 - Jump to `./dataset_generation` and run `python main.py`
 - Stay and run `python show_views.py` where you can select the `next-best-view` visualization.
 
-### 2. Explore-Net (BENBV-Net)
+### 2. BENBV-Net
 
 - Jump to `./nbv_explore_net` and run `python train.py`
-- The details of the network will be released soon.

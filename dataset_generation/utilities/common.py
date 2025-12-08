@@ -63,6 +63,9 @@ def normal_estimation(points: np.ndarray, align_vec: np.ndarray = None, max_nn=2
             res = tmp_pcd.estimate_normals(o3d.geometry.KDTreeSearchParamKNN(knn=max_nn))
             if align_vec is not None:
                 tmp_pcd.orient_normals_to_align_with_direction(unit_vector(align_vec))
+            else:
+                print ("orient_normals_towards_camera_location [0,0,0]")
+                tmp_pcd.orient_normals_towards_camera_location(np.array([0.0, 0.0, 0.0]))
         except Exception as e:
             print(f"Error in normal estimation: {e}, points: {points.shape}, status: {res}")
 
@@ -70,7 +73,7 @@ def normal_estimation(points: np.ndarray, align_vec: np.ndarray = None, max_nn=2
         tmp_pcd.points = o3d.utility.Vector3dVector(points[:, 0:3])
         tmp_pcd.normals = o3d.utility.Vector3dVector(points[:, 3:6])
         tmp_pcd.estimate_normals(o3d.geometry.KDTreeSearchParamKNN(knn=max_nn))
-
+    
     return np.concatenate([np.asarray(tmp_pcd.points), np.asarray(tmp_pcd.normals)], axis=1)
 
 
@@ -346,7 +349,7 @@ def read_dataset_file(dataset_name="ModelNet10"):
     elif dataset_name == "Stanford3D":
         # filename_list = glob.glob(r"./dataset/Stanford3D/*.obj")
         # filename_list = glob.glob(r"./dataset/Stanford3D/dragon.obj")
-        filename_list = glob.glob(r"./dataset/Stanford3D/bunny.obj")
+        filename_list = glob.glob(r"./public_dataset/Stanford3D/bunny.obj")
         # filename_list = glob.glob(r"./dataset/Stanford3D/teapot.obj")
     elif dataset_name == "ShapeNetV1":
         # filename_list = glob.glob(r"./dataset/ShapeNetV1/test/*.obj", recursive=True)

@@ -39,6 +39,8 @@ def view_generation(pointcloud: np.ndarray, camera_wd=0.5, boundary_cluster_num=
     # random select one of every group
     # cause the boundary is on the GPU so now move to CPU
     boundary_points = boundary.point.positions.numpy().reshape(-1, 3)
+    # np.savetxt("boundary_points.txt", boundary_points)
+    # exit()
     boundary_normals = pcd.select_by_mask(mask).point.normals.numpy().reshape(-1, 3)
 
     # print (f'boundary_points.shape:{boundary_points.shape}')

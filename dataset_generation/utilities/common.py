@@ -825,3 +825,38 @@ def compute_density_knn(points, target_points, k=30):
     # 归一化到[0,1]范围
     density = (density / density.max()).reshape(-1, 1)
     return density.astype(np.float32).reshape(-1, 1)
+
+def generate_poses(camera_pos, target_pos, interval_deg=10):
+    z_axis = target_pos - camera_pos
+
+    # 投影到指定平面
+    z_axis = z_axis / np.linalg.norm(z_axis)
+    ref = np.array([0., 0., 1.])
+    if abs(np.dot(ref, z_axis)) > 0.99:
+            ref = np.array([0., 1., 0.])
+    tmp = ref - np.dot(ref, z_axis) * z_axis
+    tmp = tmp / np.linalg.norm(tmp)
+
+    # 初始化任意u1
+    u1 = np.cross(z_axis, tmp)
+    u1 = u1 / np.linalg.norm(u1)
+
+    # 生成多个 up 向量
+    angles = np.arange(0, 360, interval_deg)
+    up_vectors = []
+    for a in angles:
+        rot = R.from_rotvec(z_axis * np.deg2rad(a))
+        up = rot.apply(u1)
+        up = up / np.linalg.norm(up)
+        up_vectors.append(up)
+
+    poses = []
+    for up in up_vectors:
+        x_axis = np.cross(z_axis, up)
+        R_mat = np.column_stack((x_axis, up, z_axis))
+        m = np.identity(4)
+        m[:3, :3] = R_mat
+        m[:3, 3] = camera_pos
+        poses.append(m)
+
+    return up_vectors, poses

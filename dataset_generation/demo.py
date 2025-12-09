@@ -9,7 +9,7 @@ print(os.getcwd())
 sys.path.insert(0, "./dataset_generation/utilities")
 
 from view_generation import view_generation
-from common import normal_estimation, compute_density_knn, unit_vector
+from common import normal_estimation, compute_density_knn, unit_vector,generate_poses
 
 import numpy as np
 import open3d as o3d
@@ -30,24 +30,31 @@ def show_potential_nbv(pointcloud, view_list, pred_coverage, camera_distance):
     lines = []
     colors = []
     camera_pos_list = []
-
+    mesh_frames = []
     for view in view_list:
         target_pos = view[0:3]
         direction = view[3:6]
         camera_pos = target_pos + camera_distance * direction
+        _, poses = generate_poses(camera_pos, target_pos)
+        # camera_pos_list.append(camera_pos)
         camera_pos_list.append(camera_pos)
 
+        # 取第一个pose，作为测试
+        mesh_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.01, origin=camera_pos)
+        mesh_frame.rotate(poses[0][:3, :3], center=camera_pos)
+        mesh_frames.append(mesh_frame)
+        #
         lines.append([target_pos, camera_pos])
         colors.append([1, 0, 0])
 
-    line_set = o3d.geometry.LineSet()
-    all_points = [p for line in lines for p in line]  # flatten
+    # line_set = o3d.geometry.LineSet()
+    # all_points = [p for line in lines for p in line]  # flatten
 
-    line_set.points = o3d.utility.Vector3dVector(all_points)
-    line_set.lines = o3d.utility.Vector2iVector(
-        [[i, i+1] for i in range(0, len(all_points), 2)]
-    )
-    line_set.colors = o3d.utility.Vector3dVector(colors)
+    # line_set.points = o3d.utility.Vector3dVector(all_points)
+    # line_set.lines = o3d.utility.Vector2iVector(
+        # [[i, i+1] for i in range(0, len(all_points), 2)]
+    # )
+    # line_set.colors = o3d.utility.Vector3dVector(colors)
 
     # ------------------------------------------------------
     # 3. Open3D GUI window
@@ -69,7 +76,9 @@ def show_potential_nbv(pointcloud, view_list, pred_coverage, camera_distance):
     mat.shader = "defaultUnlit"
 
     scene.add_geometry("pcd", pcd, mat)
-    scene.add_geometry("nbv_lines", line_set, mat)
+    for i in range(len(mesh_frames)):
+        scene.add_geometry(f"frame_{i}", mesh_frames[i], mat)
+    # scene.add_geometry("nbv_lines", line_set, mat)
 
     # ------------------------------------------------------
     # 5. Add text labels
@@ -197,8 +206,8 @@ if __name__ == "__main__":
     scan_count, camera_distance = 2, 0.05
     pretrained_model, device = load_model()
     # filename_list = glob(r"./dataset/test/scanned_*.txt", recursive=False)
-    # filename_list = glob(r"C:\Users\BR_User\Desktop\焊接点云数据\巨力-1201.txt", recursive=False)
-    filename_list = glob(r"C:\Users\BR_User\Desktop\焊接点云数据\宇通-车顶1.txt", recursive=False)
+    filename_list = glob(r"C:\Users\BR_User\Desktop\焊接点云数据\车顶局部\宇通-车顶1.txt", recursive=False)
+    # filename_list = glob(r"C:\Users\BR_User\Desktop\焊接点云数据\宇通-车顶1.txt", recursive=False)
     if len(filename_list) == 0:
         print("No scanned_*.txt files found in ./dataset/test/")
         exit(1)

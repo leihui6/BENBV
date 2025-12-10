@@ -64,7 +64,7 @@ def normal_estimation(points: np.ndarray, align_vec: np.ndarray = None, max_nn=2
             if align_vec is not None:
                 tmp_pcd.orient_normals_to_align_with_direction(unit_vector(align_vec))
             else:
-                print ("orient_normals_towards_camera_location [0,0,0]")
+                # print ("orient_normals_towards_camera_location [0,0,0]")
                 tmp_pcd.orient_normals_towards_camera_location(np.array([0.0, 0.0, 0.0]))
         except Exception as e:
             print(f"Error in normal estimation: {e}, points: {points.shape}, status: {res}")

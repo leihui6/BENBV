@@ -1,5 +1,5 @@
 import torch
-import os, sys
+import os, sys, time
 from glob import glob
 import numpy as np
 from pathlib import Path
@@ -105,6 +105,7 @@ def BENBV_Net(pointcloud: np.ndarray, scan_count, pretrained_model, camera_dista
     """
     view_list = []
     try:
+        start_time = time.time()
         with torch.no_grad():
             P = np.array(pointcloud, dtype=np.float32)
             view_info = view_generation(P, camera_distance)
@@ -135,6 +136,8 @@ def BENBV_Net(pointcloud: np.ndarray, scan_count, pretrained_model, camera_dista
             # print(f"Predicting ...")
             pred_coverage = pretrained_model(P, S, C)
             pred_coverage = pred_coverage.squeeze(0).cpu().numpy()
+        end_time = time.time()
+        print(f"inference time: {end_time - start_time:.4f} seconds")
         found_NBV = False
         pred_coverage = pred_coverage.squeeze()  # 将shape从(20,1)变为(20,)
         
@@ -206,8 +209,11 @@ if __name__ == "__main__":
     scan_count, camera_distance = 2, 0.05
     pretrained_model, device = load_model()
     # filename_list = glob(r"./dataset/test/scanned_*.txt", recursive=False)
-    filename_list = glob(r"C:\Users\BR_User\Desktop\焊接点云数据\车顶局部\宇通-车顶1.txt", recursive=False)
-    # filename_list = glob(r"C:\Users\BR_User\Desktop\焊接点云数据\宇通-车顶1.txt", recursive=False)
+    # filename_list = glob(r"C:\Users\BR_User\Desktop\焊接点云数据\车顶局部\宇通-车顶1.txt", recursive=False)
+    # filename_list = glob(r"C:\Users\BR_User\Desktop\焊接点云数据\车顶局部\宇通-车顶2.txt", recursive=False)
+    # filename_list = glob(r"C:\Users\BR_User\Desktop\焊接点云数据\车顶局部\宇通-车顶3.txt", recursive=False)
+    # filename_list = glob(r"C:\Users\BR_User\Desktop\焊接点云数据\车顶局部\宇通-车顶4.txt", recursive=False)
+    filename_list = glob(r"C:\Users\BR_User\Desktop\焊接点云数据\车顶局部\宇通-车顶5.txt", recursive=False)
     if len(filename_list) == 0:
         print("No scanned_*.txt files found in ./dataset/test/")
         exit(1)

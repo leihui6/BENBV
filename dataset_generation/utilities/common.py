@@ -826,11 +826,12 @@ def compute_density_knn(points, target_points, k=30):
     density = (density / density.max()).reshape(-1, 1)
     return density.astype(np.float32).reshape(-1, 1)
 
-def generate_poses(camera_pos, target_pos, interval_deg=10):
-    z_axis = target_pos - camera_pos
+def generate_poses(target_pos, camera_pos, interval_deg=10):
+    z_axis = np.array(target_pos) - np.array(camera_pos)
 
     # 投影到指定平面
     z_axis = z_axis / np.linalg.norm(z_axis)
+
     ref = np.array([0., 0., 1.])
     if abs(np.dot(ref, z_axis)) > 0.99:
             ref = np.array([0., 1., 0.])

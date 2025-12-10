@@ -17,82 +17,45 @@ import open3d as o3d
 import numpy as np
 import open3d as o3d
 
-def show_potential_nbv(pointcloud, view_list, pred_coverage, camera_distance):
-    # ------------------------------------------------------
-    # 1. Build point cloud
-    # ------------------------------------------------------
+scan_count = 1
+camera_distance = 0.15 # m
+
+def show_potential_nbv(pointcloud, poses, pred_coverage):
     pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(pointcloud[:, :3])
+    pcd.points = o3d.utility.Vector3dVector(pointcloud)
+    pcd.paint_uniform_color([1.0, 0.706, 0.0])
 
-    # ------------------------------------------------------
-    # 2. Build NBV line set
-    # ------------------------------------------------------
-    lines = []
-    colors = []
-    camera_pos_list = []
     mesh_frames = []
-    for view in view_list:
-        target_pos = view[0:3]
-        direction = view[3:6]
-        camera_pos = target_pos + camera_distance * direction
-        _, poses = generate_poses(camera_pos, target_pos)
-        # camera_pos_list.append(camera_pos)
-        camera_pos_list.append(camera_pos)
-
-        # 取第一个pose，作为测试
-        mesh_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.01, origin=camera_pos)
-        mesh_frame.rotate(poses[0][:3, :3], center=camera_pos)
+    camera_pos_list = []
+    for pose in poses:
+        camera_pos = pose[:3, 3]
+        # pose mesh
+        mesh_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1, origin=camera_pos)
+        mesh_frame.rotate(pose[:3, :3], center=camera_pos)
         mesh_frames.append(mesh_frame)
-        #
-        lines.append([target_pos, camera_pos])
-        colors.append([1, 0, 0])
-
-    # line_set = o3d.geometry.LineSet()
-    # all_points = [p for line in lines for p in line]  # flatten
-
-    # line_set.points = o3d.utility.Vector3dVector(all_points)
-    # line_set.lines = o3d.utility.Vector2iVector(
-        # [[i, i+1] for i in range(0, len(all_points), 2)]
-    # )
-    # line_set.colors = o3d.utility.Vector3dVector(colors)
-
-    # ------------------------------------------------------
-    # 3. Open3D GUI window
-    # ------------------------------------------------------
+        camera_pos_list.append(camera_pos)
+    # 添加一个原始点云坐标系
+    mesh_frames.append(o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.2, origin=np.array([0.0, 0.0, 0.0])))
+    
     app = o3d.visualization.gui.Application.instance
     app.initialize()
-
     window = app.create_window("NBV Visualization", 1280, 800)
     scene_widget = o3d.visualization.gui.SceneWidget()
     window.add_child(scene_widget)
-
     scene = o3d.visualization.rendering.Open3DScene(window.renderer)
     scene_widget.scene = scene
-
-    # ------------------------------------------------------
-    # 4. Add geometries
-    # ------------------------------------------------------
     mat = o3d.visualization.rendering.MaterialRecord()
     mat.shader = "defaultUnlit"
 
     scene.add_geometry("pcd", pcd, mat)
     for i in range(len(mesh_frames)):
         scene.add_geometry(f"frame_{i}", mesh_frames[i], mat)
-    # scene.add_geometry("nbv_lines", line_set, mat)
 
-    # ------------------------------------------------------
-    # 5. Add text labels
-    # ------------------------------------------------------
     for i, pos in enumerate(camera_pos_list):
         pos32 = np.array(pos, dtype=np.float32)
         text = f"{pred_coverage[i]:.2f}"
-
-        # Correct API
         scene_widget.add_3d_label(pos32, text)
 
-    # ------------------------------------------------------
-    # 6. Setup camera
-    # ------------------------------------------------------
     bounds = scene.bounding_box
     scene_widget.setup_camera(60, bounds, bounds.get_center())
 
@@ -102,6 +65,8 @@ def show_potential_nbv(pointcloud, view_list, pred_coverage, camera_distance):
 def BENBV_Net(pointcloud: np.ndarray, scan_count, pretrained_model, camera_distance: float, device: torch.device):  # type: ignore
     """
     method#6: our proposed method with deep learning
+
+    return : (target_pos, camera_pos)
     """
     view_list = []
     try:
@@ -136,28 +101,36 @@ def BENBV_Net(pointcloud: np.ndarray, scan_count, pretrained_model, camera_dista
             # print(f"Predicting ...")
             pred_coverage = pretrained_model(P, S, C)
             pred_coverage = pred_coverage.squeeze(0).cpu().numpy()
-        end_time = time.time()
-        print(f"inference time: {end_time - start_time:.4f} seconds")
-        found_NBV = False
+        # end_time = time.time()
+        # print(f"inference time: {end_time - start_time:.4f} seconds")
+        # found_NBV = False
         pred_coverage = pred_coverage.squeeze()  # 将shape从(20,1)变为(20,)
         
-        # print all potential nbv
-        show_potential_nbv(pointcloud, view_list,pred_coverage, camera_distance)
+        # print all potential nbv, 点云是已经归一化的【需注意】
+        # show_potential_nbv(pointcloud, view_list, pred_coverage, camera_distance)
 
-        sorted_indices = np.argsort(pred_coverage)[::-1]
-        for max_index in sorted_indices:
-            target_pos, target_normal = view_list[max_index][0:3], view_list[max_index][3:6]
+        # sorted_indices = np.argsort(pred_coverage)[::-1]
+        # for max_index in sorted_indices:
+        #     target_pos, target_normal = view_list[max_index][0:3], view_list[max_index][3:6]
+        #     camera_pos = target_pos + camera_distance * target_normal
+        #     # if camera_pos[2] > 0.1:
+        #     found_NBV = True
+        #     print(f"Ours_DL: Found NBV: {target_pos}, {camera_pos}")
+        #     nbv = target_pos, camera_pos
+        #     break
+        # if not found_NBV:
+        #     print(f"Ours_DL: No NBV found")
+        #     return None
+        # else:
+        #     return nbv
+
+        # 生成多个pose
+        position_list = []
+        for view in view_list:
+            target_pos, target_normal = view[0:3], view[3:6]
             camera_pos = target_pos + camera_distance * target_normal
-            # if camera_pos[2] > 0.1:
-            found_NBV = True
-            print(f"Ours_DL: Found NBV: {target_pos}, {camera_pos}")
-            nbv = target_pos, camera_pos
-            break
-        if not found_NBV:
-            print(f"Ours_DL: No NBV found")
-            return None
-        else:
-            return nbv
+            position_list.append((target_pos, camera_pos))
+        return position_list, pred_coverage
 
     except Exception as e:
         print(f"Ours_DL: Error: {e}")
@@ -204,16 +177,32 @@ def transform_points(points_data: np.ndarray, m: np.ndarray) -> np.ndarray:
     transformed = np.dot(m, points_h.T).T
     return transformed[:, 0:3]
 
+def cal_view_score(pred_coverage, real_poses, current_view: np.ndarray):
+    assert current_view.shape == (4,4)
+    cur_pos = current_view[:3, 3]
+    dis_weight = 0.5
+    nbv_score_weight = 0.5
+
+    dis_list = []
+    for pose in real_poses:
+        camera_pos = pose[:3, 3]
+        dis = np.linalg.norm(camera_pos - cur_pos)
+        dis_list.append(dis)
+    scores = nbv_score_weight * pred_coverage + dis_weight * np.array(dis_list) / (np.array(dis_list).max() + 1e-6)
+    return scores
+
 
 if __name__ == "__main__":
-    scan_count, camera_distance = 2, 0.05
     pretrained_model, device = load_model()
     # filename_list = glob(r"./dataset/test/scanned_*.txt", recursive=False)
-    # filename_list = glob(r"C:\Users\BR_User\Desktop\焊接点云数据\车顶局部\宇通-车顶1.txt", recursive=False)
+    filename_list = glob(r"C:\Users\BR_User\Desktop\焊接点云数据\车顶局部\宇通-车顶1.txt", recursive=False)
     # filename_list = glob(r"C:\Users\BR_User\Desktop\焊接点云数据\车顶局部\宇通-车顶2.txt", recursive=False)
     # filename_list = glob(r"C:\Users\BR_User\Desktop\焊接点云数据\车顶局部\宇通-车顶3.txt", recursive=False)
     # filename_list = glob(r"C:\Users\BR_User\Desktop\焊接点云数据\车顶局部\宇通-车顶4.txt", recursive=False)
-    filename_list = glob(r"C:\Users\BR_User\Desktop\焊接点云数据\车顶局部\宇通-车顶5.txt", recursive=False)
+    # filename_list = glob(r"C:\Users\BR_User\Desktop\焊接点云数据\车顶局部\宇通-车顶5.txt", recursive=False)
+    # filename_list = glob(r"C:\Users\BR_User\Desktop\焊接点云数据\车顶局部\宇通-车顶*.txt", recursive=False)
+    # filename_list = glob(r"C:\Users\BR_User\Desktop\焊接点云数据\巨力数据\巨力-1201.txt", recursive=False)
+    # filename_list.sort()
     if len(filename_list) == 0:
         print("No scanned_*.txt files found in ./dataset/test/")
         exit(1)
@@ -228,12 +217,12 @@ if __name__ == "__main__":
         t_points, m = scale_points(point_with_normal)
         
         print(f"Points shape: {t_points.shape}")
-        np.savetxt(Path(filename).parent / Path("unified_normals_" + str(filename.stem) + ".txt"), t_points, fmt="%f")
+        # np.savetxt(Path(filename).parent / Path("unified_normals_" + str(filename.stem) + ".txt"), t_points, fmt="%f")
         # exit()
 
         # camera_distance can be ignored in this case
-        tmp_nbv = BENBV_Net(t_points, scan_count, pretrained_model, camera_distance, device)
-        if tmp_nbv is None:
+        nbvs, pred_coverage = BENBV_Net(t_points, scan_count, pretrained_model, camera_distance, device)
+        if nbvs is None:
             break
         # save_path = Path(filename).parent / Path("nbv_" + str(filename.stem) + ".txt")
         # np.savetxt(save_path, np.concatenate([tmp_nbv[0], tmp_nbv[1]], axis=0).reshape(2, 3), fmt="%f")
@@ -241,11 +230,29 @@ if __name__ == "__main__":
 
         # back the real world coordinates
         # target_pos, camera_pos
-        target_pos, camera_pos = transform_points(np.array(tmp_nbv[0]).reshape(1, 3), np.linalg.inv(m)), transform_points(
-            np.array(tmp_nbv[1]).reshape(1, 3), np.linalg.inv(m)
-        )
-        # reuse the camera_distance, and update the camera_pos
-        camera_pos = target_pos + camera_distance * unit_vector(camera_pos - target_pos)
-        save_path = Path(filename).parent / Path("real_nbv_" + str(filename.stem) + ".txt")
-        np.savetxt(save_path, np.concatenate([target_pos, camera_pos], axis=0).reshape(2, 3), fmt="%f")
-        print(f"Saved NBV to {save_path}")
+        # target_pos, camera_pos = transform_points(np.array(tmp_nbv[0]).reshape(1, 3), np.linalg.inv(m)), transform_points(
+        #     np.array(tmp_nbv[1]).reshape(1, 3), np.linalg.inv(m)
+        # )
+        # # reuse the camera_distance, and update the camera_pos
+        # camera_pos = target_pos + camera_distance * unit_vector(camera_pos - target_pos)
+        # save_path = Path(filename).parent / Path("real_nbv_" + str(filename.stem) + ".txt")
+        # np.savetxt(save_path, np.concatenate([target_pos, camera_pos], axis=0).reshape(2, 3), fmt="%f")
+        # print(f"Saved NBV to {save_path}")
+
+        # 转换为点云坐标系下的多个NBV pose
+        real_poses = []
+        for index, nbv in enumerate(nbvs):
+            target_pos, camera_pos = nbv[0], nbv[1]
+            target_pos = transform_points(np.array(target_pos).reshape(1, 3), np.linalg.inv(m)).reshape(3)
+            camera_pos = transform_points(np.array(camera_pos).reshape(1, 3), np.linalg.inv(m)).reshape(3)
+            # save_path = Path(filename).parent / Path("real_nbv_poses_" + str(filename.stem) + ".txt")
+            # np.savetxt(save_path, nbv.reshape(4, 4), fmt="%f")
+            # print(f"Saved NBV pose to {save_path}")
+            _, poses = generate_poses(target_pos, camera_pos)
+            picked_pose = poses[0]
+            real_poses.append(picked_pose)
+
+        # 调整分数，不只是用预测的pred_coverage，还要考虑距离当前视角的远近
+        scores = cal_view_score(pred_coverage, real_poses, np.identity(4))
+        show_potential_nbv(points, real_poses, scores)
+            
